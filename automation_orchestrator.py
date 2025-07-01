@@ -9,14 +9,11 @@ from datetime import datetime
 import re # For finding ### headings
 import google.generativeai as genai
 import openai
-from dotenv import load_dotenv # .envファイルを読み込むためのインポート
+from dotenv import load_dotenv
 
 # --- Gemini API Configuration ---
-# .envファイルを読み込む
 load_dotenv()
 
-# Note: You must set the GEMINI_API_KEY environment variable for this script to work.
-# Example: export GEMINI_API_KEY='Your-API-Key'
 try:
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     if not GEMINI_API_KEY:
@@ -131,6 +128,7 @@ def insert_images(processed_content, file_path):
 
     return "\n".join(output_lines)
 
+# openai用
 def process_file_with_openai(file_path):
     """OpenAI APIにファイル処理を依頼し、結果を取得する"""
     if not openai_client:
@@ -156,6 +154,7 @@ def process_file_with_openai(file_path):
 
     prompt = f"""
 以下のMarkdownコンテンツを、指定されたルールに従ってリライトしてください。
+**注意事項**: 冒頭の[autohtml]タグに囲われた文字列はそのままにしてください。変更を禁じます。
 
 ## 変換ルール:
 1.  **h3セクションの並べ替え**: 最初の2つのh3セクションはそのままにし、残りの4つのh3セクションは以下の順序で再配置してください。
@@ -163,10 +162,10 @@ def process_file_with_openai(file_path):
 2.  **h2見出しのグループ化**: h3セクションを2つずつグループ化し、各グループに読者が読みたくなるようなh2見出しを作成してください（合計3つのh2見出し）。
 3.  **ゲームタイトルの追加**: 各h2見出しにゲームタイトル「{game_title}」を追加してください。
 4.  **ブロガー風リライト**: 全てのh3見出しを読者が読みたくなるようにリライトし、対応する本文も以下の口調でリライトしてください。
-    -   口調: 理性的で丁寧、かつ感情豊かな雰囲気。
+    -   口調: テンション高くて語彙が爆発してる系。感嘆符がよくつき、語尾が伸びるときがある「ー！」。
     -   絵文字は使用しないでください。
 5.  **記事まとめの生成**: 記事の最後に「## まとめ」のh2見出しを作成し、ゲームの魅力を簡潔にまとめた本文を生成してください。読者がプレイしたくなるような魅力的な内容を簡潔に作成してください。
-6.  **画像文字列の挿入は不要**: [autoimg]タグなどの画像文字列は、この応答には含めないでください。Pythonスクリプトが後で挿入します。
+
 
 ## 元のMarkdownコンテンツ:
 {content}
@@ -189,6 +188,7 @@ def process_file_with_openai(file_path):
     print(f"--- OpenAI処理完了: {os.path.basename(file_path)} ---\n")
     return final_content
 
+# gemini用
 def process_file_with_gemini(file_path):
     """LLMエージェントにファイル処理を依頼し、結果を取得し、画像を挿入する"""
     if not gemini_model:
@@ -220,6 +220,7 @@ def process_file_with_gemini(file_path):
 
     prompt = f"""
 以下のMarkdownコンテンツを、指定されたルールに従ってリライトしてください。
+**注意事項**: 冒頭の[autohtml]タグに囲われた文字列はそのままにしてください。変更を禁じます。
 
 ## 変換ルール:
 1.  **h3セクションの並べ替え**: 最初の2つのh3セクションはそのままにし、残りの4つのh3セクションは以下の順序で再配置してください。
@@ -227,10 +228,9 @@ def process_file_with_gemini(file_path):
 2.  **h2見出しのグループ化**: h3セクションを2つずつグループ化し、各グループに読者が読みたくなるようなh2見出しを作成してください（合計3つのh2見出し）。
 3.  **ゲームタイトルの追加**: 各h2見出しにゲームタイトル「{game_title}」を追加してください。
 4.  **ブロガー風リライト**: 全てのh3見出しを読者が読みたくなるようにリライトし、対応する本文も以下の口調でリライトしてください。
-    -   口調: 読者に語りかけるような、親しみやすく、ワクワクさせるようなブロガー風の口調。
+    -   口調: 落ち着いた柔らかい文体。丁寧な口調で、読者への語りかけが多い。「〜してみてくださいね。」
     -   絵文字は使用しないでください。
 5.  **記事まとめの生成**: 記事の最後に「## まとめ」のh2見出しを作成し、ゲームの魅力を簡潔にまとめた本文を生成してください。読者がプレイしたくなるような魅力的な内容を簡潔に作成してください。
-6.  **画像文字列の挿入は不要**: [autoimg]タグなどの画像文字列は、この応答には含めないでください。Pythonスクリプトが後で挿入します。
 
 ## 元のMarkdownコンテンツ:
 {content}
