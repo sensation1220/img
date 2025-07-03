@@ -80,6 +80,35 @@ def get_image_files_in_folder(folder_path):
                 images.append(f)
     return images
 
+def reorder_h3_sections(content):
+    """h3セクションを再配置する共通関数"""
+    # h3セクションを抽出
+    h3_sections = re.findall(r'(###\s[^\n]*\n(?:(?!###)[\s\S])*)', content)
+    
+    if len(h3_sections) < 6:
+        print("警告: h3セクションが6つ未満です。再配置をスキップします。")
+        return content
+    
+    # 最初の2つのh3は固定、残りの4つをランダムに並べ替え
+    fixed_h3_sections = h3_sections[:2]
+    random_h3_sections = h3_sections[2:6]
+    random.shuffle(random_h3_sections)
+    
+    # 再配置されたh3セクションを結合
+    reordered_h3_sections = fixed_h3_sections + random_h3_sections
+    
+    # 元のコンテンツからh3セクション以外の部分を抽出
+    # [autohtml]タグなどの冒頭部分を保護
+    content_before_h3 = ""
+    first_h3_match = re.search(r'###\s[^\n]*\n', content)
+    if first_h3_match:
+        content_before_h3 = content[:first_h3_match.start()]
+    
+    # 再構成されたコンテンツを作成
+    reordered_content = content_before_h3 + "\n".join(reordered_h3_sections)
+    
+    return reordered_content
+
 def insert_images(processed_content, file_path):
     """処理済みコンテンツに画像URLを挿入する共通関数"""
     original_filename_with_ext = os.path.basename(file_path)
@@ -128,7 +157,58 @@ def insert_images(processed_content, file_path):
 
     return "\n".join(output_lines)
 
-# openai用
+def format_content_with_llm(content, api_type="gemini", game_title=""):
+    """第2段階: リライト済みコンテンツのフォーマット調整（改行・マーク付け）"""
+    print(f"--- フォーマット調整開始 ({api_type}) ---")
+    
+    prompt = f"""
+以下のMarkdownコンテンツに、読みやすさと重要な情報の強調のためのフォーマット調整を行ってください。
+
+## フォーマット調整ルール:
+1. **適切な改行と空白行**:
+   - 段落間に適切な空白行を挿入
+   - 長い段落は読みやすくなるよう適度に分割
+   - リスト項目の前後にも空白行を挿入
+
+2. **重要な内容の強調**:
+   - 特に重要で読者の関心を引く部分を[mark][/mark]で囲う
+   - ゲームの魅力的な特徴、攻略のポイント、おすすめ要素など
+   - 1つのh3セクションにつき1~2箇所必ず囲うこと
+   - 例: この設定をすることで[mark]一気に敵を倒せるんです！[/mark]
+
+3. **注意事項**:
+   - h2、h3見出しは変更しない
+   - [autohtml]タグは絶対に変更しない
+   - 文章の内容や意味は変更しない
+
+## 処理対象のコンテンツ:
+{content}
+"""
+
+    try:
+        if api_type == "openai" and openai_client:
+            response = openai_client.chat.completions.create(
+                model="o4-mini",
+                messages=[
+                    {"role": "system", "content": "あなたは文章フォーマットの専門家です。"},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            formatted_content = response.choices[0].message.content.strip()
+        elif api_type == "gemini" and gemini_model:
+            response = gemini_model.generate_content(prompt)
+            formatted_content = response.text.strip()
+        else:
+            print(f"エラー: {api_type} APIが利用できません。フォーマット調整をスキップします。")
+            return content
+            
+        print(f"--- フォーマット調整完了 ({api_type}) ---")
+        return formatted_content
+        
+    except Exception as e:
+        print(f"エラー: フォーマット調整中に問題が発生しました: {e}")
+        return content
+
 def process_file_with_openai(file_path):
     """OpenAI APIにファイル処理を依頼し、結果を取得する"""
     if not openai_client:
@@ -140,55 +220,51 @@ def process_file_with_openai(file_path):
     with open(file_path, 'r', encoding='utf-8') as f_in:
         content = f_in.read()
 
-    game_title = os.path.basename(file_path).replace(".md", "")
-    h3_sections = re.findall(r'(###\s[^\n]*\n(?:(?!###)[\s\S])*)', content)
+    # h3セクションの再配置をプログラムで実行
+    reordered_content = reorder_h3_sections(content)
     
-    if len(h3_sections) < 6:
-        print(f"警告: {os.path.basename(file_path)} には6つのh3セクションがありません。処理をスキップします。")
-        return content
-
-    fixed_h3_sections = h3_sections[:2]
-    random_h3_sections = h3_sections[2:6]
-    random.shuffle(random_h3_sections)
-    reordered_content_for_llm = "\n".join(fixed_h3_sections + random_h3_sections)
-
+    game_title = os.path.basename(file_path).replace(".md", "")
+    
+    # 第1段階: リライト処理（プロンプトを簡潔化）
     prompt = f"""
 以下のMarkdownコンテンツを、指定されたルールに従ってリライトしてください。
 **注意事項**: 冒頭の[autohtml]タグに囲われた文字列はそのままにしてください。変更を禁じます。
 
 ## 変換ルール:
-1.  **h3セクションの並べ替え**: 最初の2つのh3セクションはそのままにし、残りの4つのh3セクションは以下の順序で再配置してください。
-    {reordered_content_for_llm}
-2.  **h2見出しのグループ化**: h3セクションを2つずつグループ化し、各グループに読者が読みたくなるようなh2見出しを作成してください（合計3つのh2見出し）。
-3.  **ゲームタイトルの追加**: 各h2見出しにゲームタイトル「{game_title}」を追加してください。
-4.  **ブロガー風リライト**: 全てのh3見出しを読者が読みたくなるようにリライトし、対応する本文も以下の口調でリライトしてください。
-    -   口調: テンション高くて語彙が爆発してる系。感嘆符がよくつき、語尾が伸びるときがある「ー！」。
+1.  **h2見出しのグループ化**: h3セクションを2つずつグループ化し、各グループに読者が読みたくなるようなh2見出しを作成してください（合計3つのh2見出し）。
+2.  **ゲームタイトルの追加**: 各h2見出しにゲームタイトル「{game_title}」を追加してください。
+3.  **ブロガー風リライト**: 全てのh3見出しを読者が読みたくなるようにリライトし、対応する本文も以下の口調でリライトしてください。
+    -   口調: 偉人が語っているような感じ。「〜じゃぞ」のような親しみやすい年配の語り方。
     -   絵文字は使用しないでください。
-5.  **記事まとめの生成**: 記事の最後に「## まとめ」のh2見出しを作成し、ゲームの魅力を簡潔にまとめた本文を生成してください。読者がプレイしたくなるような魅力的な内容を簡潔に作成してください。
+    -   **重要**: 元の文章量を維持してください。文章を短縮しないでください。
+4.  **記事まとめの生成**: 記事の最後に「## まとめ」のh2見出しを作成し、ゲームの魅力を簡潔にまとめた本文を生成してください。読者がプレイしたくなるような魅力的な内容を簡潔に作成してください。
 
-
-## 元のMarkdownコンテンツ:
-{content}
+## 処理対象のMarkdownコンテンツ（h3セクションは既に適切に再配置済み）:
+{reordered_content}
 """
 
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o",  # または "gpt-3.5-turbo" など
+            model="o4-mini",
             messages=[
                 {"role": "system", "content": "あなたはプロのブロガーです。"},
                 {"role": "user", "content": prompt}
             ]
         )
-        processed_content = response.choices[0].message.content.strip()
+        rewritten_content = response.choices[0].message.content.strip()
     except Exception as e:
         print(f"エラー: OpenAI API呼び出し中に問題が発生しました: {e}")
         return None
 
-    final_content = insert_images(processed_content, file_path)
+    # 第2段階: フォーマット調整（改行・マーク付け）
+    formatted_content = format_content_with_llm(rewritten_content, "openai", game_title)
+    
+    # 第3段階: 画像挿入
+    final_content = insert_images(formatted_content, file_path)
     print(f"--- OpenAI処理完了: {os.path.basename(file_path)} ---\n")
     return final_content
 
-# gemini用
+
 def process_file_with_gemini(file_path):
     """LLMエージェントにファイル処理を依頼し、結果を取得し、画像を挿入する"""
     if not gemini_model:
@@ -200,51 +276,42 @@ def process_file_with_gemini(file_path):
     with open(file_path, 'r', encoding='utf-8') as f_in:
         content = f_in.read()
 
+    # h3セクションの再配置をプログラムで実行
+    reordered_content = reorder_h3_sections(content)
+    
     # ファイル名からゲームタイトルを特定
     game_title = os.path.basename(file_path).replace(".md", "")
 
-    # h3セクションを抽出
-    h3_sections = re.findall(r'(###\s[^\n]*\n(?:(?!###)[\s\S])*)', content)
-    
-    if len(h3_sections) < 6:
-        print(f"警告: {os.path.basename(file_path)} には6つのh3セクションがありません。処理をスキップします。")
-        return content # 処理をスキップして元のコンテンツを返す
-
-    # 最初の2つのh3は固定、残りの4つをランダムに並べ替え
-    fixed_h3_sections = h3_sections[:2]
-    random_h3_sections = h3_sections[2:6]
-    random.shuffle(random_h3_sections)
-    
-    # LLMに渡すための再構成されたコンテンツ
-    reordered_content_for_llm = "\n".join(fixed_h3_sections + random_h3_sections)
-
+    # 第1段階: リライト処理（プロンプトを簡潔化）
     prompt = f"""
 以下のMarkdownコンテンツを、指定されたルールに従ってリライトしてください。
 **注意事項**: 冒頭の[autohtml]タグに囲われた文字列はそのままにしてください。変更を禁じます。
 
 ## 変換ルール:
-1.  **h3セクションの並べ替え**: 最初の2つのh3セクションはそのままにし、残りの4つのh3セクションは以下の順序で再配置してください。
-    {reordered_content_for_llm}
-2.  **h2見出しのグループ化**: h3セクションを2つずつグループ化し、各グループに読者が読みたくなるようなh2見出しを作成してください（合計3つのh2見出し）。
-3.  **ゲームタイトルの追加**: 各h2見出しにゲームタイトル「{game_title}」を追加してください。
-4.  **ブロガー風リライト**: 全てのh3見出しを読者が読みたくなるようにリライトし、対応する本文も以下の口調でリライトしてください。
-    -   口調: 落ち着いた柔らかい文体。丁寧な口調で、読者への語りかけが多い。「〜してみてくださいね。」
+1.  **h2見出しのグループ化**: h3セクションを2つずつグループ化し、各グループに読者が読みたくなるようなh2見出しを作成してください（合計3つのh2見出し）。
+2.  **ゲームタイトルの追加**: 各h2見出しにゲームタイトル「{game_title}」を追加してください。
+3.  **ブロガー風リライト**: 全てのh3見出しを読者が読みたくなるようにリライトし、対応する本文も以下の口調でリライトしてください。
+    -   口調: 上品だが軽やかな大人女性口調。少し辛口なレビューもあり。「〜かしら？」「これは推せるわね」をたまに使う。
     -   絵文字は使用しないでください。
-5.  **記事まとめの生成**: 記事の最後に「## まとめ」のh2見出しを作成し、ゲームの魅力を簡潔にまとめた本文を生成してください。読者がプレイしたくなるような魅力的な内容を簡潔に作成してください。
+    -   **重要**: 元の文章量を維持してください。文章を短縮しないでください。
+4.  **記事まとめの生成**: 記事の最後に「## まとめ」のh2見出しを作成し、ゲームの魅力を簡潔にまとめた本文を生成してください。読者がプレイしたくなるような魅力的な内容を簡潔に作成してください。
 
-## 元のMarkdownコンテンツ:
-{content}
+## 処理対象のMarkdownコンテンツ（h3セクションは既に適切に再配置済み）:
+{reordered_content}
 """
 
     try:
         response = gemini_model.generate_content(prompt)
-        processed_content = response.text.strip()
+        rewritten_content = response.text.strip()
     except Exception as e:
         print(f"エラー: Gemini API呼び出し中に問題が発生しました: {e}")
         return None
 
-    # --- 画像挿入ロジック --- ここから
-    final_content = insert_images(processed_content, file_path)
+    # 第2段階: フォーマット調整（改行・マーク付け）
+    formatted_content = format_content_with_llm(rewritten_content, "gemini", game_title)
+    
+    # 第3段階: 画像挿入
+    final_content = insert_images(formatted_content, file_path)
 
     print(f"--- Gemini処理完了（画像挿入済み）: {os.path.basename(file_path)} ---\n")
     return final_content
