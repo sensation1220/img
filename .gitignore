@@ -6,3 +6,4 @@
 
 .env
 automation_orchestrator.py
+generate_csv_from_md.py
