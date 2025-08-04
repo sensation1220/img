@@ -1,137 +1,168 @@
-# 日本語ファイル名変換・移動スクリプト
+# 🎮 ゲームランキング統合ツール
 
-## 概要
+このツールは、個別のゲーム紹介記事を統合し、LLM を使用して魅力的なランキング記事として再構成する Python スクリプトです。
 
-このスクリプトは、日本語の Markdown ファイル名をローマ字表記に変換し、`0-list`ディレクトリから対応するローマ字ディレクトリに移動するツールです。また、ファイル名の対応関係を`name_mapping.json`に自動で記録・更新します。
+## ✨ 機能
 
-## 機能
+- 📊 ranking.txt に基づいたゲームランキング統合
+- 🤖 AI（OpenAI GPT-4 / Google Gemini）による文章リライト
+- 🛡️ autohtml タグなどの保護機能
+- 📝 複数の文体スタイル対応（friendly/professional/casual）
+- 🔄 API プロバイダーの簡単切り替え
 
-- 🔄 日本語ファイル名の自動ローマ字変換
-- 📁 対象ディレクトリの自動作成
-- 📝 マッピング情報の JSON 管理
-- 🔒 重複ファイルの上書き防止
-- 📊 処理結果の詳細レポート
+## 🚀 セットアップ
 
-## ファイル構成
+### 1. 必要なパッケージのインストール
+
+```bash
+# 基本パッケージ
+pip install python-dotenv
+
+# OpenAI API使用の場合
+pip install openai
+
+# Google Gemini API使用の場合
+pip install google-generativeai
+```
+
+### 2. 環境変数の設定
+
+`.env`ファイルを作成し、使用する API キーを設定してください：
+
+```env
+# OpenAI API（どちらか一方でOK）
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Google Gemini API（どちらか一方でOK）
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 3. API キーの取得方法
+
+#### OpenAI API
+
+1. [OpenAI Platform](https://platform.openai.com/)にアクセス
+2. アカウント作成/ログイン
+3. API Keys > Create new secret key
+
+#### Google Gemini API
+
+1. [Google AI Studio](https://aistudio.google.com/)にアクセス
+2. Google アカウントでログイン
+3. Get API key をクリック
+
+## ⚙️ 設定
+
+`0-ranking/enhanced_merge_ranking_md.py`の設定セクションを編集：
+
+```python
+# LLM設定
+LLM_PROVIDER = "openai"  # "gemini" or "openai"
+ENABLE_LLM_REWRITE = True  # False にするとLLM書き換えをスキップ
+REWRITE_STYLE = "friendly"  # friendly, professional, casual
+
+# OpenAI モデル設定
+OPENAI_MODEL = "gpt-4"  # gpt-4, gpt-4-turbo, gpt-3.5-turbo など
+
+# Gemini モデル設定  
+GEMINI_MODEL = "gemini-1.5-flash"  # gemini-1.5-flash, gemini-1.5-pro など
+```
+
+### 設定項目の説明
+
+| 設定項目             | 選択肢                                       | 説明                       |
+| -------------------- | -------------------------------------------- | -------------------------- |
+| `LLM_PROVIDER`       | `"openai"` / `"gemini"`                      | 使用する AI プロバイダー   |
+| `ENABLE_LLM_REWRITE` | `True` / `False`                             | AI 書き換え機能の有効/無効 |
+| `REWRITE_STYLE`      | `"friendly"` / `"professional"` / `"casual"` | 文章のスタイル             |
+| `OPENAI_MODEL`       | `"gpt-4"` / `"gpt-4-turbo"` / `"gpt-3.5-turbo"` | OpenAI使用時のモデル   |
+| `GEMINI_MODEL`       | `"gemini-1.5-flash"` / `"gemini-1.5-pro"`   | Gemini使用時のモデル       |
+
+### 使用可能モデル
+
+#### OpenAI
+- **gpt-4**: 最高品質（高コスト）
+- **gpt-4-turbo**: 高品質・高速（中コスト）  
+- **gpt-3.5-turbo**: 高速・経済的（低コスト）
+
+#### Google Gemini
+- **gemini-1.5-flash**: 高速・経済的
+- **gemini-1.5-pro**: 高品質（やや高コスト）
+
+### 文体スタイルの違い
+
+- **friendly**: 明るく親しみやすいブロガー口調
+- **professional**: 専門的で信頼性の高い評価口調
+- **casual**: カジュアルで親近感のある口調
+
+## 📁 ファイル構成
 
 ```
 blog/
-├── 0-list/              # 移動元ディレクトリ（日本語mdファイル）
-├── 2-src/
-│   └── name_mapping.json # ファイル名対応表
-├── move_and_convert.py   # メインスクリプト
-└── README.md
+├── 0-ranking/
+│   ├── ranking.txt          # ランキング順序
+│   ├── ゲーム名.md          # 各ゲームの紹介記事
+│   └── enhanced_merged_ranking.md  # 統合された最終出力
+└── enhanced_merge_ranking_md.py
 ```
 
-## 使用方法
+## 🎯 使用方法
 
-### 基本実行
+1. `0-ranking/ranking.txt`にゲーム名を順位順で記載
+2. 各ゲームの紹介記事を`0-ranking/ゲーム名.md`として保存
+3. スクリプトを実行：
 
 ```bash
-python3 move_and_convert.py
+python 0-ranking/enhanced_merge_ranking_md.py
 ```
 
-### 実行例
+## 📋 ranking.txt の書式
 
-```bash
-$ python3 move_and_convert.py
-日本語mdファイルのローマ字変換・移動処理を開始します...
-既存のマッピング 49 件を読み込みました
-3 個のmdファイルを発見しました
-新規追加: 新しいゲーム.md -> atarashii-gemu
-移動完了: 新しいゲーム.md -> atarashii-gemu/
-既存マッピング: 鳴潮.md -> meichou
-移動完了: 鳴潮.md -> meichou/
-name_mapping.json を更新しました (総計: 50 件)
-2 個のファイルを移動しました
+```
+1. ゲーム名1
+2. ゲーム名2
+3. ゲーム名3
+...
 ```
 
-## 変換ルール
+## 🛡️ 保護機能
 
-### 基本的な文字変換
+以下のタグは書き換え時に自動的に保護されます：
 
-| 日本語文字   | ローマ字 |
-| ------------ | -------- |
-| ー           | -        |
-| ：           | -        |
-| ・           | -        |
-| （           | -        |
-| ）           | (削除)   |
-| ～           | -        |
-| ！           | (削除)   |
-| 　(全角空白) | -        |
-| (半角空白)   | -        |
+- `[autohtml]...[/autohtml]`
+- `[autoimg]...[/autoimg]`
+- `[mark]...[/mark]`
+- フロントマター（`---`で囲まれた部分）
 
-### 全角英数字
+## ⚠️ 注意事項
 
-| 全角 | 半角 |
-| ---- | ---- |
-| Ａ   | a    |
-| Ｒ   | r    |
-| Ｘ   | x    |
-| １   | 1    |
-| ２   | 2    |
-| ３   | 3    |
+- OpenAI API 使用時は GPT-4 モデルを使用します（料金にご注意ください）
+- API キーは適切に管理し、公開リポジトリにコミットしないでください
+- 大量のファイル処理時は API レート制限にご注意ください
 
-### 正規化処理
+## 🔧 トラブルシューティング
 
-1. 連続するハイフンを単一に変換 (`--` → `-`)
-2. 先頭・末尾のハイフンを削除
-3. 全体を小文字に変換
+### よくあるエラー
 
-## 処理フロー
+1. **API キーエラー**: `.env`ファイルの API キーが正しく設定されているか確認
+2. **インポートエラー**: 必要なパッケージがインストールされているか確認
+3. **ファイルが見つからない**: ファイルパスとファイル名が正しいか確認
 
-```mermaid
-graph TD
-    A[スクリプト開始] --> B[既存マッピング読み込み]
-    B --> C[0-listディレクトリからmdファイル検索]
-    C --> D[各ファイルに対して処理]
-    D --> E[ローマ字名生成]
-    E --> F{既存マッピング？}
-    F -->|Yes| G[既存マッピング使用]
-    F -->|No| H[新規マッピング追加]
-    G --> I[対象ディレクトリ作成]
-    H --> I
-    I --> J[ファイル移動]
-    J --> K{他のファイル？}
-    K -->|Yes| D
-    K -->|No| L[マッピング保存]
-    L --> M[処理結果表示]
-    M --> N[終了]
-```
+### ログの見方
 
-## エラーハンドリング
+- ✅ 成功
+- ⚠️ 警告
+- ❌ エラー
+- 🤖 AI 処理中
 
-- **ディレクトリ不存在**: `0-list`ディレクトリが存在しない場合、エラーメッセージを表示して終了
-- **ファイル重複**: 移動先に同名ファイルが存在する場合、移動をスキップ
-- **移動エラー**: ファイル移動中のエラーは捕捉し、詳細を表示
+## 📊 使用コスト目安
 
-## name_mapping.json 形式
+| プロバイダー | モデル           | 概算コスト（1 ゲーム） | 品質 |
+| ------------ | ---------------- | ---------------------- | ---- |
+| OpenAI       | GPT-4            | $0.03-0.08             | 最高 |
+| OpenAI       | GPT-4-Turbo      | $0.015-0.04            | 高   |
+| OpenAI       | GPT-3.5-Turbo    | $0.002-0.008           | 中   |
+| Google       | Gemini 1.5 Pro   | $0.002-0.01            | 高   |
+| Google       | Gemini 1.5 Flash | $0.0005-0.003          | 中〜高 |
 
-```json
-{
-  "日本語ファイル名.md": "romaji-filename",
-  "鳴潮.md": "meichou",
-  "ゼンレスゾーンゼロ.md": "zenless-zone-zero"
-}
-```
-
-## 注意事項
-
-- ⚠️ ファイル移動は元に戻せません。実行前にバックアップを推奨
-- 📋 既存のマッピングがある場合は、それが優先されます
-- 🔄 同一ファイルの重複実行は安全です（既存ファイルはスキップ）
-
-## トラブルシューティング
-
-### Q: ファイルが移動されない
-
-A: 移動先に同名ファイルが既に存在している可能性があります。ログを確認してください。
-
-### Q: マッピングが更新されない
-
-A: `2-src/`ディレクトリの書き込み権限を確認してください。
-
-### Q: 日本語変換が期待通りでない
-
-A: `name_mapping.json`を手動編集して、正しいマッピングを追加してください。
+\*実際のコストは文章量と API 料金により変動します。予算に応じて最適なモデルを選択してください。
