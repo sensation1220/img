@@ -1,6 +1,7 @@
 0-list
 0-must
 0-ranking
+0-new
 1-non-romen
 1-non-romen-img
 2-src
@@ -9,3 +10,8 @@
 .env
 automation_orchestrator.py
 generate_csv_from_md.py
+merge_ranking_md.py
+merged_ranking.md
+ranking.txt
+single_rewrite.py
+game_blog_generator.py
