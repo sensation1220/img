@@ -7,7 +7,11 @@
 2-src
 3-process
 
+.venv/
 .env
+__pycache__/
+*.pyc
+
 automation_orchestrator.py
 generate_csv_from_md.py
 merge_ranking_md.py
@@ -17,4 +21,3 @@ single_rewrite.py
 game_blog_generator.py
 convert_wxr_to_csv.py
 
-めでぃあ_20251210_195901.csv
